@@ -1,0 +1,311 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Client {
+  id                       Int                     @id @default(autoincrement())
+  customer_no              String                  @unique
+  agreement_ref_number     String                  @unique @default(uuid())
+  client_type              String // BUSINESS, HOLIDAY_HOME, PERMANENT_RESIDENCE
+  title                    String? // Mr, Mrs, Ms, Miss, Dr, Prof, Rev
+  first_name               String?
+  surname                  String?
+  company_name             String?
+  vat_no                   String?
+  company_reg_no           String?
+  id_passport_no           String?
+  billing_cycle            String?
+  anniversary_month        Int
+  client_since             DateTime
+  is_active                Boolean                 @default(true)
+  version                  Int                     @default(1) // For optimistic locking
+  captured_by              String?
+  captured_date            DateTime                @default(now())
+  payment_method           String                  @default("EFT") // EFT, DEBIT_ORDER_NETCASH
+  bank_name                String?
+  account_type             String?
+  branch_code              String?
+  account_no               String?
+  cc_provider              String? // Reused for Netcash Account Holder Name
+  created_at               DateTime                @default(now())
+  updated_at               DateTime                @updatedAt
+  sites                    Site[]
+  services                 ClientService[]
+  audit_tariff_adjustments AuditTariffAdjustment[]
+  alarmMakeId              Int?
+  alarmMake                AlarmMake?              @relation(fields: [alarmMakeId], references: [id])
+  alarmModelId             Int?
+  alarmModel               AlarmModel?             @relation(fields: [alarmModelId], references: [id])
+  zones                    ClientZone[]
+  monthly_tariff           Float?
+  is_billing_incomplete    Boolean                 @default(true)
+  billed_partitions        SiteTransmitterPartition[] @relation("PartitionBilling")
+  xero_contact_id          String?
+  xero_reference           String?
+  is_reconciled            Boolean                 @default(false)
+  master_payer_id          Int?
+  master_payer             Client?                 @relation("BodyCorporateUnits", fields: [master_payer_id], references: [id])
+  units                    Client[]                @relation("BodyCorporateUnits")
+
+  @@index([surname, company_name])
+}
+
+model Street {
+  id        Int     @id @default(autoincrement())
+  name      String
+  suburb_id Int?
+  suburb    Suburb? @relation(fields: [suburb_id], references: [id])
+  town_id   Int?
+  town      Town?   @relation(fields: [town_id], references: [id])
+  is_active Boolean @default(true)
+  sites     Site[]
+}
+
+model BillingCycle {
+  id        Int     @id @default(autoincrement())
+  name      String
+  is_active Boolean @default(true)
+}
+
+model Site {
+  id                     Int                    @id @default(autoincrement())
+  client_id              Int
+  client                 Client                 @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  site_name              String
+  street_address         String
+  street_number          String?
+  unit_number            String?
+  street_name            String?
+  street_id              Int?
+  street                 Street?                @relation(fields: [street_id], references: [id])
+  town_id                Int?
+  town                   Town?                  @relation(fields: [town_id], references: [id])
+  suburb_id              Int?
+  suburb                 Suburb?                @relation(fields: [suburb_id], references: [id])
+  sector_id              Int?
+  sector                 Sector?                @relation(fields: [sector_id], references: [id])
+  estate_id              Int?
+  estate                 Estate?                @relation(fields: [estate_id], references: [id])
+  site_phone             String?
+  radio_no               String?
+  radio_no_2             String?
+  comms_no               String?
+  comms_no_2             String?
+  primary_transmitter    String                 @default("NONE") // NONE, RF_RADIO, HYYP_GSM, OLARM_GSM, DAHUA_IP, AJAX_IP, OTHER
+  secondary_transmitter  String                 @default("NONE") // NONE, RF_RADIO, HYYP_GSM, OLARM_GSM, DAHUA_IP, AJAX_IP, OTHER
+  cctv_camera_count      Int                    @default(0)
+  annual_maintenance_fee Float                  @default(0)
+  access_type            String                 @default("NONE") // NONE, PHYSICAL_KEY, ACCESS_CODE, KEYPAD_BIOMETRIC, BOTH_KEY_AND_CODE, RESPONSE_PROPERTY_ACCESS
+  key_number_ref         String?
+  key_vault_location     String?                @default("Main Office Safe")
+  access_code_notes      String?
+  site_operations_notes  String?
+  emergency_contacts     SiteEmergencyContact[]
+  transmitters           SiteTransmitter[]
+  created_at             DateTime               @default(now())
+  updated_at             DateTime               @updatedAt
+}
+
+model EmergencyContact {
+  id              Int                    @id @default(autoincrement())
+  full_name       String
+  primary_phone   String
+  secondary_phone String?
+  email           String?
+  notes           String?
+  created_at      DateTime               @default(now())
+  updated_at      DateTime               @updatedAt
+  sites           SiteEmergencyContact[]
+}
+
+model SiteEmergencyContact {
+  id                Int              @id @default(autoincrement())
+  site_id           Int
+  site              Site             @relation(fields: [site_id], references: [id], onDelete: Cascade)
+  contact_id        Int
+  contact           EmergencyContact @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  priority_order    Int
+  relationship_type String
+  is_keyholder      Boolean          @default(false)
+  notes             String?
+}
+
+model ClientService {
+  client_id           Int
+  client              Client  @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  service_id          Int
+  service             Service @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  negotiated_fee      Float
+  base_fee_at_booking Float
+  discount_reason     String?
+  is_negotiated       Boolean @default(false)
+
+  @@id([client_id, service_id])
+}
+
+model AuditTariffAdjustment {
+  id             Int      @id @default(autoincrement())
+  client_id      Int
+  client         Client   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  service_id     Int
+  service        Service  @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  base_fee       Float
+  negotiated_fee Float
+  variance       Float
+  reason         String
+  captured_by    String
+  created_at     DateTime @default(now())
+}
+
+model Town {
+  id        Int      @id @default(autoincrement())
+  name      String
+  is_active Boolean  @default(true)
+  sites     Site[]
+  suburbs   Suburb[]
+  streets   Street[]
+}
+
+model Suburb {
+  id        Int      @id @default(autoincrement())
+  name      String
+  town_id   Int?
+  town      Town?    @relation(fields: [town_id], references: [id])
+  is_active Boolean  @default(true)
+  sites     Site[]
+  streets   Street[]
+  estates   Estate[]
+}
+
+model Sector {
+  id        Int     @id @default(autoincrement())
+  name      String
+  is_active Boolean @default(true)
+  sites     Site[]
+}
+
+model Estate {
+  id        Int     @id @default(autoincrement())
+  name      String
+  suburb_id Int?
+  suburb    Suburb? @relation(fields: [suburb_id], references: [id])
+  is_active Boolean @default(true)
+  sites     Site[]
+}
+
+model Service {
+  id                       Int                     @id @default(autoincrement())
+  name                     String
+  base_fee                 Float
+  is_annual                Boolean                 @default(false)
+  is_active                Boolean                 @default(true)
+  clients                  ClientService[]
+  audit_tariff_adjustments AuditTariffAdjustment[]
+}
+
+model AlarmMake {
+  id        Int          @id @default(autoincrement())
+  name      String       @unique
+  is_active Boolean      @default(true)
+  models    AlarmModel[]
+  clients   Client[]
+}
+
+model AlarmModel {
+  id        Int       @id @default(autoincrement())
+  makeId    Int
+  make      AlarmMake @relation(fields: [makeId], references: [id], onDelete: Cascade)
+  name      String
+  is_active Boolean   @default(true)
+  clients   Client[]
+
+  @@unique([makeId, name])
+}
+
+model ZoneType {
+  id        Int          @id @default(autoincrement())
+  label     String       @unique
+  is_active Boolean      @default(true)
+  zones     ClientZone[]
+}
+
+model ClientZone {
+  id          Int      @id @default(autoincrement())
+  clientId    Int
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  zoneNumber  Int
+  zoneTypeId  Int
+  zoneType    ZoneType @relation(fields: [zoneTypeId], references: [id])
+  description String?
+
+  @@unique([clientId, zoneNumber])
+}
+
+model ZoneDescriptor {
+  id        Int      @id @default(autoincrement())
+  label     String   @unique
+  is_active Boolean  @default(true)
+}
+
+model PaymentMethod {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  is_active Boolean  @default(true)
+}
+
+model SiteTransmitter {
+  id               Int       @id @default(autoincrement())
+  site_id          Int
+  site             Site      @relation(fields: [site_id], references: [id], onDelete: Cascade)
+  role             String    // 'PRIMARY', 'SECONDARY'
+  transmitter_no   String
+  port_id          String?
+  status           String    @default("ACTIVE") // 'ACTIVE', 'IN_REPAIR', 'IN_STOCK', 'RETIRED'
+  assigned_at            DateTime  @default(now())
+  retired_at             DateTime?
+  replacement_note       String?
+  is_billable_monthly    Boolean   @default(false)
+  monthly_fee            Float?
+  has_annual_license_fee Boolean   @default(false)
+  has_annual_gsm_fee     Boolean   @default(false)
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+  partitions             SiteTransmitterPartition[]
+}
+
+model SiteTransmitterPartition {
+  id               Int             @id @default(autoincrement())
+  transmitter_id   Int
+  transmitter      SiteTransmitter @relation(fields: [transmitter_id], references: [id], onDelete: Cascade)
+  partition_no     String          // e.g. "P0", "P1", "P2"
+  label            String?
+  is_billable      Boolean         @default(false)
+  monthly_fee      Float?          @default(0.00)
+  billed_client_id Int?
+  billed_client    Client?         @relation("PartitionBilling", fields: [billed_client_id], references: [id])
+}
+
+model UnallocatedHardware {
+  id         Int      @id @default(autoincrement())
+  client_no  String   @unique
+  port_id    String
+  base_tx    String
+  ext_ref    String?
+  status     String   @default("UNALLOCATED")
+  created_at DateTime @default(now())
+}
+
+model InternalEquipment {
+  id             Int      @id @default(autoincrement())
+  transmitter_no String   @unique
+  port_id        String?
+  description    String
+  location       String?
+  category       String
+  created_at     DateTime @default(now())
+}
